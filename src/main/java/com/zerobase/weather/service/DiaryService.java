@@ -30,7 +30,7 @@ public class DiaryService {
     @Value("${openweathermap.key}")
     private String apiKey;
 
-    @Value("${openweathrmap.city}")
+    @Value("${openweathermap.city}")
     private String city;
 
     private final DiaryRepository diaryRepository;
