@@ -1,13 +1,18 @@
 package com.zerobase.weather.service;
 
+import com.zerobase.weather.domain.DateWeather;
 import com.zerobase.weather.domain.Diary;
+import com.zerobase.weather.repository.DateWeatherRepository;
 import com.zerobase.weather.repository.DiaryRepository;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -19,39 +24,77 @@ import java.util.List;
 import java.util.Map;
 
 @Service
+@Transactional
 public class DiaryService {
 
     @Value("${openweathermap.key}")
     private String apiKey;
+
     @Value("${openweathrmap.city}")
     private String city;
 
     private final DiaryRepository diaryRepository;
+    private final DateWeatherRepository dateWeatherRepository;
 
-    public DiaryService(DiaryRepository diaryRepository) {
+    public DiaryService(DiaryRepository diaryRepository,DateWeatherRepository dateWeatherRepository) {
         this.diaryRepository= diaryRepository ;
+        this.dateWeatherRepository = dateWeatherRepository;
     }
 
+    @Transactional
+    @Scheduled(cron = "0 0 1 * * *")
+    public  void saveWeatherDate(){
+        //todo
+        dateWeatherRepository.save(getWeatherFromApi());
+    }
+
+
+    @Transactional(isolation = Isolation.SERIALIZABLE )
     public void createDiary(LocalDate date, String text){
         //open weather map에서 날씨 데이터 가져오기
-        String weatherData = getWeatherString();
-
-
-        //받아온 날씨 json 파싱
-        Map<String, Object> parsedWeather = parseWeather(weatherData);
+        DateWeather dateWeather=getDateWeather(date);
 
         //파싱된 데이터 + 일기 값 우리 db에 넣기
         Diary nowDiary = new Diary();
-
-        nowDiary.setWeather(parsedWeather.get("main").toString());
-        nowDiary.setIcon(parsedWeather.get("icon").toString());
-        nowDiary.setTemperature((Double) parsedWeather.get("temp"));
-
+        nowDiary.setDateWeather(dateWeather);
         nowDiary.setText(text);
-        nowDiary.setDate(date);
+
         diaryRepository.save(nowDiary);
 
     }
+    @Transactional
+    @Scheduled(cron = "0/5 0 1 * * *")
+    public void saveWeather(){
+        dateWeatherRepository.save(getWeatherFromApi());
+    }
+
+    private DateWeather getDateWeather(LocalDate date){
+        List<DateWeather> dateWeatherListFromDB = dateWeatherRepository.findAllByDate(date);
+        if(dateWeatherListFromDB.size()==0)            // 사이즈 0 일때 값없음 .
+            return getWeatherFromApi();
+        else
+            return dateWeatherListFromDB.get(0);
+
+    }
+    private DateWeather getWeatherFromApi(){
+        //open weather map 에서 가져오기
+        String weatherData = getWeatherString();
+        //날씨 json 파싱
+        Map<String,Object> parsedWeather = parseWeather(weatherData);
+
+        DateWeather dateWeather=new DateWeather();
+
+
+        dateWeather.setDate(LocalDate.now());
+        dateWeather.setWeather(parsedWeather.get("main").toString());
+        dateWeather.setIcon(parsedWeather.get("icon").toString());
+        dateWeather.setTemperature((Double)parsedWeather.get("temp"));
+
+
+
+        return dateWeather;
+    }
+
 
     public void updateDiary(LocalDate date,String text){
         Diary nowDiary = diaryRepository.getFirstByDate(date);
@@ -71,11 +114,7 @@ public class DiaryService {
             connection.setRequestMethod("GET");
             int responseCode = connection.getResponseCode();
             BufferedReader br;
-            if (responseCode==200){
-                br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            }else {
-                br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            }
+            br = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 
             String inputLine;
             StringBuilder response = new StringBuilder();
@@ -122,10 +161,11 @@ public class DiaryService {
 
     }
 
+    @Transactional(readOnly = true)
     public List<Diary> readDiary(LocalDate date){
         return diaryRepository.findAllByDate(date);
     }
-
+    @Transactional(readOnly = true)
     public List<Diary> readDiaries(LocalDate start,LocalDate end){
         return diaryRepository.findAllByDateBetween(start,end);
     }
