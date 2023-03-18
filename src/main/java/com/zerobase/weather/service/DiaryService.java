@@ -1,5 +1,6 @@
 package com.zerobase.weather.service;
 
+import com.zerobase.weather.WeatherApplication;
 import com.zerobase.weather.domain.DateWeather;
 import com.zerobase.weather.domain.Diary;
 import com.zerobase.weather.repository.DateWeatherRepository;
@@ -8,6 +9,8 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,8 @@ public class DiaryService {
     @Value("${openweathermap.city}")
     private String city;
 
+    private static final Logger logger = LoggerFactory.getLogger(WeatherApplication.class);
+
     private final DiaryRepository diaryRepository;
     private final DateWeatherRepository dateWeatherRepository;
 
@@ -45,6 +50,7 @@ public class DiaryService {
     @Scheduled(cron = "0 0 1 * * *")
     public  void saveWeatherDate(){
         //todo
+        logger.info("날씨 데이터 삽입 완료");
         dateWeatherRepository.save(getWeatherFromApi());
     }
 
@@ -60,7 +66,7 @@ public class DiaryService {
         nowDiary.setText(text);
 
         diaryRepository.save(nowDiary);
-
+        logger.info("end to create diary");
     }
     @Transactional
     @Scheduled(cron = "0/5 0 1 * * *")
@@ -163,6 +169,10 @@ public class DiaryService {
 
     @Transactional(readOnly = true)
     public List<Diary> readDiary(LocalDate date){
+        logger.debug("read diary");
+//        if(date.isAfter(LocalDate.ofYearDay(3050,1))){
+//            throw new InvalidDate();
+//        }
         return diaryRepository.findAllByDate(date);
     }
     @Transactional(readOnly = true)
